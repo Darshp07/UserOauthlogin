@@ -1,0 +1,20 @@
+
+import axios from "axios";
+
+const API = axios.create({
+ 
+  baseURL: "http://localhost:8080/api/auth/appUsers",
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+export const registerUser = async (userData) => {
+  const response = await API.post("/register", userData);
+  return response.data;
+};
+
+export const loginUser = async (credentials) => {
+  const response = await API.post("/LogInUser", credentials);
+  return response.data;
+};
