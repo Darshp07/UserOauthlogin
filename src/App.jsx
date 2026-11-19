@@ -1,10 +1,10 @@
-import { GoogleLogin } from "@react-oauth/google";
-import { loginUser, registerUser } from "./api/authService";
+import { registerUser } from "./api/authService";
 import { useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { saveAuthResponseTokens } from "./auth/authTokens.js";
-import { useAppAuth } from "./auth/useAppAuth.js";
-
+import { useState, useEffect } from "react";
+import {
+    AuthProvider,
+    useSessionAuth
+} from "./auth/AuthContext.jsx";
 import {
 
   ShieldCheck,
@@ -35,7 +35,7 @@ import {
 
 import "./App.css";
 
-const BASE_URL = "http://localhost:8080/api/auth/appUsers";
+const BACKEND_URL = "http://localhost:8080";
 
 
 
@@ -49,14 +49,26 @@ export default function App() {
 
   const [remember, setRemember] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+const {
+    user,
+    isAuthenticated,
+    loading,
+    checkSession
+} = useSessionAuth();
 
-  const { token } = useAppAuth();
-  const navigate = useNavigate();
+const navigate = useNavigate();
+
   const [message, setMessage] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.has("oauthLogin") && params.has("error")
-      ? "Invalid email or password."
-      : "";
+    if (params.get("google") === "success") {
+      return "Google verified. Completing sign-in...";
+    }
+    if (!params.has("error")) {
+      return "";
+    }
+    return params.get("error") === "google"
+      ? "Google sign-in failed. Please try again."
+      : "Invalid email or password.";
   });
 
   const [form, setForm] = useState({
@@ -69,93 +81,70 @@ export default function App() {
 
   });
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.has("oauthLogin")) {
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
+useEffect(() => {
+    const completeGoogleLogin = async () => {
+        const params = new URLSearchParams(window.location.search);
 
-    if (token) {
-      navigate("/dashboard", { replace: true });
-    }
-  }, [token, navigate]);
+        if (params.get("google") === "success") {
+            window.history.replaceState(
+                {},
+                document.title,
+                window.location.pathname
+            );
 
+            const currentUser = await checkSession();
+
+            if (currentUser) {
+                navigate("/dashboard", { replace: true });
+            } else {
+                setMessage("Google login session could not be verified. Please try again.");
+            }
+
+            return;
+        }
+
+        if (!loading && isAuthenticated) {
+            navigate("/dashboard", { replace: true });
+        }
+    };
+
+    completeGoogleLogin();
+}, [loading, isAuthenticated, checkSession, navigate]);
   const updateField = (e) => {
-
-    setForm({ ...form, [e.target.name]: e.target.value });
-
+    setForm((currentForm) => ({
+      ...currentForm,
+      [e.target.id]: e.target.value,
+    }));
     setMessage("");
-
   };
 
 
 
   const handleSubmit = async (e) => {
-
-    e.preventDefault();
-
     setMessage("");
-
-
-
     if (mode === "register" && form.name.trim().length < 2) {
-
+      e.preventDefault();
       setMessage("Please enter your full name.");
-
       return;
-
     }
-
-
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-
+      e.preventDefault();
       setMessage("Please enter a valid email address.");
-
       return;
-
     }
-
-
 
     if (form.password.length < 8) {
-
+      e.preventDefault();
       setMessage("Password must contain at least 8 characters.");
-
       return;
-
+    }
+   if (mode === "login") {
+     setIsSubmitting(true);
+     return;
     }
 
-    if (mode === "login") {
-
-      setIsSubmitting(true);
-      try {
-        const result = await loginUser({
-          userName: form.email.trim(),
-          passWord: form.password,
-        });
-        if (result.code === 0) {
-          setMessage(result.message || "Invalid email or password.");
-          return;
-        }
-
-        const { hasRefreshToken } = saveAuthResponseTokens(result.data);
-        setMessage(
-          hasRefreshToken
-            ? "Login successful!"
-            : "Login succeeded, but no refresh token was returned. Automatic refresh is unavailable."
-        );
-      } catch (error) {
-        setMessage(
-          error.response?.data?.message || "Invalid email or password."
-        );
-      } finally {
-        setIsSubmitting(false);
-      }
-      return;
-
-    }
-
+    e.preventDefault();
     try {
 
       const result = await registerUser({
@@ -200,8 +189,6 @@ export default function App() {
 
         "Registration failed. Please check your backend and try again.";
 
-
-
       setMessage(serverMessage);
 
     }
@@ -211,92 +198,8 @@ export default function App() {
 
 
 
-
-  const handleGoogleSuccess = async (response) => {
-
-    try {
-
-
-
-      // const result = await fetch(API.GOOGLE_LOGIN, {
-
-      //   method: "POST",
-
-      //   headers: {
-
-      //     "Content-Type": "application/json",
-
-      //   },
-
-      //   body: JSON.stringify({
-
-      //     credential: response.credential,
-
-      //   }),
-
-      // });
-
-
-
-
-
-      const result = await fetch(
-
-        `${BASE_URL}/google`,
-
-        {
-
-          method: "POST",
-
-          headers: {
-
-            "Content-Type": "application/json",
-
-          },
-
-          body: JSON.stringify({
-
-            credential: response.credential,
-
-          }),
-
-        }
-
-      );
-
-      const data = await result.json();
-
-
-
-      console.log("Backend response:", data);
-
-
-
-      if (!result.ok || data.code === 0) {
-
-        setMessage(data.message || "Google login failed");
-
-        return;
-
-      }
-
-
-
-      const { hasRefreshToken } = saveAuthResponseTokens(data.data);
-      setMessage(
-        hasRefreshToken
-          ? "Google login successful!"
-          : "Google login succeeded, but no refresh token was returned. Automatic refresh is unavailable."
-      );
-
-    } catch (error) {
-
-      console.error("Google login error:", error);
-
-      setMessage("Unable to connect to backend.");
-
-    }
-
+  const handleGoogleLogin = () => {
+    window.location.assign(`${BACKEND_URL}/oauth2/authorization/google`);
   };
 
 
@@ -420,8 +323,6 @@ export default function App() {
               description="Built with modern authentication practices."
 
             />
-
-
 
             <Feature
 
@@ -572,25 +473,14 @@ export default function App() {
 
 
             <div className="google-area">
-
-              <GoogleLogin
-
-                onSuccess={handleGoogleSuccess}
-
-                onError={() => setMessage("Google sign-in failed.")}
-
-                theme={dark ? "filled_black" : "outline"}
-
-                shape="rectangular"
-
-                size="large"
-
-                text="continue_with"
-
-                width="100%"
-
-              />
-
+              <button
+                className="google-placeholder"
+                type="button"
+                onClick={handleGoogleLogin}
+              >
+                <span className="google-g" aria-hidden="true">G</span>
+                Continue with Google
+              </button>
             </div>
 
 
@@ -605,9 +495,12 @@ export default function App() {
 
             </div>
 
-
-
-            <form onSubmit={handleSubmit} noValidate>
+            <form
+              action={`${BACKEND_URL}/login`}
+              method="post"
+              onSubmit={handleSubmit}
+              noValidate
+            >
 
               {mode === "register" && (
 
@@ -665,7 +558,7 @@ export default function App() {
 
                     id="email"
 
-                    name="email"
+                    name={mode === "login" ? "username" : "email"}
 
                     type="email"
 

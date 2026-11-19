@@ -1,61 +1,55 @@
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useAuthContext } from "react-oauth2-code-pkce";
 import { useNavigate } from "react-router-dom";
-import { saveAuthTokens } from "../auth/authTokens.js";
 import { useAppAuth } from "../auth/useAppAuth.js";
+import { clearAuthTokens } from "../auth/authTokens.js";
 
 export default function OAuthCallback() {
+  const { token } = useAppAuth();
   const {
-    token,
+    token: oauthToken,
     loginInProgress,
-    error,
+    error: oauthError,
+    logOut,
   } = useAuthContext();
-
-  const { token: savedToken } = useAppAuth();
   const navigate = useNavigate();
-  const [persistedToken, setPersistedToken] = useState("");
-  const [saveError, setSaveError] = useState("");
-  const hasAuthorizationCode = new URLSearchParams(window.location.search).has(
-    "code"
-  );
+  const params = new URLSearchParams(window.location.search);
+  const hasAuthorizationCode = params.has("code");
   const hasCodeVerifier = Boolean(
     localStorage.getItem("ROCP_PKCE_code_verifier")
   );
+  const error = hasAuthorizationCode
+    ? ""
+    : "No sign-in code was returned. Start again from the login page.";
+
+  const returnToLogin = () => {
+    clearAuthTokens();
+    logOut();
+    navigate("/", { replace: true });
+  };
 
   useEffect(() => {
-    if (!token || persistedToken === token) {
+    if (token || oauthToken) {
+      navigate("/dashboard", { replace: true });
       return;
     }
 
-    try {
-      saveAuthTokens({ accessToken: token, refreshToken: null });
-      setPersistedToken(token);
-      setSaveError("");
-    } catch {
-      setSaveError("Your sign-in token could not be saved. Please try again.");
-    }
-  }, [token, persistedToken]);
+  }, [token, oauthToken, navigate]);
 
-  useEffect(() => {
-    if (token && persistedToken === token && savedToken === token) {
-      navigate("/dashboard", { replace: true });
-    }
-  }, [token, persistedToken, savedToken, navigate]);
-
-  if (error || saveError) {
+  if (error || oauthError) {
     return (
       <div style={{ padding: 20 }}>
         <h2>Login failed</h2>
-        <pre>{saveError || String(error)}</pre>
-        <button onClick={() => navigate("/", { replace: true })}>
-          Back to Login
-        </button>
+        <p role="alert">
+          {error || String(oauthError)}
+        </p>
+        <button onClick={returnToLogin}>Back to Login</button>
       </div>
     );
   }
 
-  if (!token && !loginInProgress) {
+  if (!token && !oauthToken && !loginInProgress) {
     return (
       <div style={{ padding: 20 }}>
         <h2>Authentication did not complete</h2>
@@ -64,9 +58,7 @@ export default function OAuthCallback() {
             ? "The authorization code was returned without its PKCE verifier. Start a new login from the app’s home page."
             : "No access token was received. Start a new login from the app’s home page."}
         </p>
-        <button onClick={() => navigate("/", { replace: true })}>
-          Back to Login
-        </button>
+        <button onClick={returnToLogin}>Back to Login</button>
       </div>
     );
   }
@@ -74,7 +66,7 @@ export default function OAuthCallback() {
   return (
     <main className="oauth-loading" role="status" aria-live="polite">
       <span className="oauth-spinner" aria-hidden="true" />
-      <h2>{token ? "Finishing sign in..." : "Signing you in..."}</h2>
+      <h2>{token || oauthToken ? "Finishing sign in..." : "Signing you in..."}</h2>
       <p>Saving your session before opening the dashboard.</p>
     </main>
   );

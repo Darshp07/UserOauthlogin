@@ -1,143 +1,157 @@
 
 import { useNavigate } from "react-router-dom";
-import { useAuthContext } from "react-oauth2-code-pkce";
-import { clearAuthTokens } from "../auth/authTokens.js";
-import { useAppAuth } from "../auth/useAppAuth.js";
+import { useSessionAuth } from "../auth/AuthContext.jsx";
 import {
-  Users,
-  ShieldCheck,
-  ArrowRight,
-  LogOut,
-  LayoutDashboard,
+    Users,
+    ShieldCheck,
+    ArrowRight,
+    LogOut,
+    LayoutDashboard
 } from "lucide-react";
+
 import "./Pages.css";
 
 export default function Dashboard() {
-  const { token, refreshToken, refreshError } = useAppAuth();
-  const { logOut } = useAuthContext();
-  const navigate = useNavigate();
+    const navigate = useNavigate();
 
-  const handleLogout = () => {
-    clearAuthTokens();
-    logOut();
-    navigate("/", { replace: true });
-  };
+    const {
+        user,
+        loading,
+        isAuthenticated,
+        authError,
+        logout
+    } = useSessionAuth();
 
-  return (
-    <div className="app-layout">
-      <aside className="sidebar">
-        <h2 className="brand">DarshakApp<span>.</span></h2>
+    if (loading) {
+        return <div className="status-message">Checking login session...</div>;
+    }
 
-        <div className="side-link active">
-          <LayoutDashboard size={19} />
-          Dashboard
+    return (
+        <div className="app-layout">
+            <aside className="sidebar">
+                <h2 className="brand">
+                    DarshakApp<span>.</span>
+                </h2>
+
+                <div className="side-link active">
+                    <LayoutDashboard size={19} />
+                    Dashboard
+                </div>
+
+                <div
+                    className="side-link"
+                    onClick={() => navigate("/users")}
+                >
+                    <Users size={19} />
+                    All Users
+                </div>
+
+                <button className="logout-btn" onClick={logout}>
+                    <LogOut size={18} />
+                    Logout
+                </button>
+            </aside>
+
+            <main className="main-content">
+                {!isAuthenticated && (
+                    <div className="error-message" role="alert">
+                        {authError || "Please log in."}
+                        <button onClick={() => navigate("/")}>
+                            Sign In
+                        </button>
+                    </div>
+                )}
+
+                <div className="info-card">
+                    <ShieldCheck size={22} />
+
+                    <div>
+                        <h3>Authentication Status</h3>
+                        <p>
+                            {isAuthenticated
+                                ? "Authenticated"
+                                : "Not logged in"}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="topbar">
+                    <div>
+                        <p className="eyebrow">OVERVIEW</p>
+                        <h1>Dashboard</h1>
+                        <p className="muted">
+                            Welcome back! Manage your application here.
+                        </p>
+                    </div>
+
+                    <div className="profile-badge">
+                        {(user?.name || "U").charAt(0).toUpperCase()}
+                    </div>
+                </div>
+
+                <div className="welcome-card">
+                    <div>
+                        <p className="eyebrow">YOUR WORKSPACE</p>
+
+                        <h2>
+                            Welcome {user?.name || "User"} 👋
+                        </h2>
+
+                        <p>
+                            Manage users securely using Google OAuth2
+                            session authentication.
+                        </p>
+
+                        <button
+                            className="primary-btn"
+                            onClick={() => navigate("/users")}
+                            disabled={!isAuthenticated}
+                        >
+                            <Users size={18} />
+                            Load All Users
+                            <ArrowRight size={18} />
+                        </button>
+                    </div>
+
+                    <div className="hero-icon">
+                        <ShieldCheck size={76} />
+                    </div>
+                </div>
+
+                <div className="stats-grid">
+                    <div className="stat-card">
+                        <div className="stat-icon purple">
+                            <Users size={23} />
+                        </div>
+
+                        <p>Logged-in User</p>
+                        <h2>{user?.name || "—"}</h2>
+                        <span>{user?.email || "Not available"}</span>
+                    </div>
+
+                    <div className="stat-card">
+                        <div className="stat-icon blue">
+                            <ShieldCheck size={23} />
+                        </div>
+
+                        <p>Authentication</p>
+                        <h2>Google OIDC</h2>
+                        <span>Spring Boot Session</span>
+                    </div>
+                </div>
+
+                <div className="info-card">
+                    <ShieldCheck size={22} />
+
+                    <div>
+                        <h3>Secure API access</h3>
+                        <p>
+                            Your JSESSIONID session cookie is sent
+                            automatically with protected API requests.
+                        </p>
+                    </div>
+                </div>
+            </main>
         </div>
-
-        <div
-          className="side-link"
-          onClick={() => navigate("/users")}
-        >
-          <Users size={19} />
-          All Users
-        </div>
-
-        <button className="logout-btn" onClick={handleLogout}>
-          <LogOut size={18} /> Logout
-        </button>
-      </aside>
-
-
-      <main className="main-content">
-        {token && !refreshToken && (
-          <div className="error-message" role="status">
-            Your backend did not provide a refresh token. Automatic access-token
-            renewal is unavailable; sign in again after this token expires.
-          </div>
-        )}
-
-        {refreshError && (
-          <div className="error-message" role="alert">
-            {refreshError}
-          </div>
-        )}
-
-        <div className="info-card">
-          <ShieldCheck size={22} />
-          <div>
-            <h3>OAuth2 Authentication Status</h3>
-            <p>
-              {token ? "Authenticated" : "Not logged in"}
-            </p>
-          </div>
-        </div>
-
-        <div className="topbar">
-
-          <div>
-            <p className="eyebrow">OVERVIEW</p>
-            <h1>Dashboard</h1>
-            <p className="muted">
-              Welcome back! Manage your application here.
-            </p>
-          </div>
-
-          <div className="profile-badge">D</div>
-        </div>
-
-        <div className="welcome-card">
-          <div>
-            <p className="eyebrow">YOUR WORKSPACE</p>
-            <h2>Welcome to DarshakApp 👋</h2>
-            <p>
-              Manage users securely using OAuth 2.0 authentication.
-            </p>
-
-            <button
-              className="primary-btn"
-              onClick={() => navigate("/users")}
-            >
-              <Users size={18} />
-              Load All Users
-              <ArrowRight size={18} />
-            </button>
-          </div>
-
-          <div className="hero-icon">
-            <ShieldCheck size={76} />
-          </div>
-        </div>
-
-        <div className="stats-grid">
-          <div className="stat-card">
-            <div className="stat-icon purple">
-              <Users size={23} />
-            </div>
-            <p>Total Users</p>
-            <h2>—</h2>
-            <span>Click Load All Users to fetch</span>
-          </div>
-
-          <div className="stat-card">
-            <div className="stat-icon blue">
-              <ShieldCheck size={23} />
-            </div>
-            <p>Authentication</p>
-            <h2>OAuth 2.0</h2>
-            <span>Access-token security</span>
-          </div>
-        </div>
-
-        <div className="info-card">
-          <ShieldCheck size={22} />
-          <div>
-            <h3>Secure API access</h3>
-            <p>
-              Your saved JWT token will be sent to the backend
-              when requesting protected user data.
-            </p>
-          </div>
-        </div>
-      </main>
-    </div>
-  );
+    );
 }

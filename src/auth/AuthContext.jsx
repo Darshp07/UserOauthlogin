@@ -1,72 +1,77 @@
-import { useEffect, useState } from "react";
+
+import { useCallback, useEffect, useState, useContext } from "react";
 import AuthContext from "./authContextValue.js";
-import { getAuthTokens, subscribeToAuthState } from "./authTokens.js";
-import {
-  getAccessTokenExpiry,
-  refreshAccessToken,
-} from "./tokenRefresh.js";
+
+const BACKEND_URL = "http://localhost:8080";
 
 export function AuthProvider({ children }) {
-  const [auth, setAuth] = useState(getAuthTokens);
-  const [refreshError, setRefreshError] = useState("");
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [authError, setAuthError] = useState("");
 
-  useEffect(() => {
-    const syncAuth = () => setAuth(getAuthTokens());
-    const unsubscribe = subscribeToAuthState(syncAuth);
-    window.addEventListener("storage", syncAuth);
+    const checkSession = useCallback(async () => {
+        try {
+            const response = await fetch(
+                `${BACKEND_URL}/api/auth/appUsers/me`,
+                {
+                    method: "GET",
+                    credentials: "include"
+                }
+            );
 
-    return () => {
-      unsubscribe();
-      window.removeEventListener("storage", syncAuth);
+            if (!response.ok) {
+                setUser(null);
+                setAuthError("Not logged in");
+                return null;
+            }
+
+            const result = await response.json();
+            const currentUser = result.data;
+
+            setUser(currentUser || null);
+            setAuthError("");
+
+            return currentUser || null;
+        } catch (error) {
+            console.error(error);
+            setUser(null);
+            setAuthError("Unable to connect to backend.");
+            return null;
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        checkSession();
+    }, [checkSession]);
+
+    const logout = async () => {
+        try {
+            await fetch(`${BACKEND_URL}/logout`, {
+                method: "POST",
+                credentials: "include"
+            });
+        } finally {
+            setUser(null);
+            window.location.href = "/";
+        }
     };
-  }, []);
 
-  useEffect(() => {
-    if (!auth.token || !auth.refreshToken) {
-      return undefined;
-    }
+    return (
+        <AuthContext.Provider value={{
+            user,
+            loading,
+            isAuthenticated: Boolean(user),
+            authError,
+            checkSession,
+            logout
+        }}>
+            {children}
+        </AuthContext.Provider>
+    );
+}
 
-    if (getAccessTokenExpiry(auth.token) === null) {
-      return undefined;
-    }
-
-    let timeoutId;
-    const scheduleRefresh = () => {
-      const expiresAt = getAccessTokenExpiry(auth.token);
-      if (expiresAt === null) {
-        return;
-      }
-
-      const refreshIn = expiresAt - Date.now() - 60_000;
-      if (refreshIn > 0) {
-        timeoutId = window.setTimeout(
-          scheduleRefresh,
-          Math.min(refreshIn, 2_147_000_000)
-        );
-        return;
-      }
-
-      refreshAccessToken()
-        .then(() => setRefreshError(""))
-        .catch((error) => {
-          setRefreshError(error.message || "Unable to refresh your session.");
-        });
-    };
-    scheduleRefresh();
-
-    return () => window.clearTimeout(timeoutId);
-  }, [auth.token, auth.refreshToken]);
-
-  return (
-    <AuthContext.Provider
-      value={{
-        token: auth.token,
-        refreshToken: auth.refreshToken,
-        isAuthenticated: Boolean(auth.token),
-        refreshError,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+export function useSessionAuth() {
+    return useContext(AuthContext);
 }
