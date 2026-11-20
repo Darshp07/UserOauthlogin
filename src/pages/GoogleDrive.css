@@ -388,3 +388,12 @@
     opacity: 0.45;
     cursor: not-allowed;
 }
+.drive-delete-btn:hover {
+    color: #ef4444;
+    background: #fee2e2;
+}
+
+.drive-delete-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

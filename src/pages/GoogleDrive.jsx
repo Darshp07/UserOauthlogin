@@ -37,7 +37,9 @@ import {
     X,
     CheckCircle,
     AlertCircle,
-    File
+    File,
+    Download,
+    Trash2
 } from "lucide-react";
 
 import "./GoogleDrive.css";
@@ -47,6 +49,12 @@ const API_URL =
 
 const UPLOAD_URL =
     "http://localhost:8080/api/auth/appUsers/drive/upload";
+
+const DOWNLOAD_URL =
+    "http://localhost:8080/api/auth/appUsers/drive/download";
+
+const DELETE_URL =
+    "http://localhost:8080/api/auth/appUsers/drive/delete";
 
 export default function GoogleDrive() {
 
@@ -64,6 +72,8 @@ export default function GoogleDrive() {
     const [sort, setSort] = useState("name");
 
     const [mobileMenu, setMobileMenu] = useState(false);
+    const [downloadingId, setDownloadingId] = useState(null);
+    const [deletingId, setDeletingId] = useState(null);
 
     // Upload states
     const [selectedFile, setSelectedFile] = useState(null);
@@ -423,7 +433,103 @@ export default function GoogleDrive() {
     };
 
     // ==========================================
-    // 8. UI
+    // 8. Download Google Drive File
+    // ==========================================
+
+    const handleDownload = async (file) => {
+
+        if (!file || isFolder(file)) return;
+
+        try {
+            setDownloadingId(file.id);
+            setError("");
+
+            const response = await apiFetch(
+                `${DOWNLOAD_URL}/${encodeURIComponent(file.id)}`,
+                {
+                    method: "GET",
+                    headers: { Accept: "application/octet-stream" }
+                }
+            );
+
+            if (!response.ok) {
+                const message = await response.text();
+                throw new Error(message || `Download failed. HTTP ${response.status}`);
+            }
+
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+
+            link.href = downloadUrl;
+            link.download = file.name || "download";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+            window.setTimeout(() => {
+                window.URL.revokeObjectURL(downloadUrl);
+            }, 1000);
+
+        } catch (err) {
+            console.error("Download error:", err);
+            setError(err.message || "Unable to download file.");
+        } finally {
+            setDownloadingId(null);
+        }
+    };
+
+    // ==========================================
+    // 9. Delete Google Drive File / Folder
+    // ==========================================
+
+    const handleDelete = async (file) => {
+
+        if (!file?.id) return;
+
+        const confirmed = window.confirm(
+            `Are you sure you want to delete "${file.name}" from Google Drive?`
+        );
+
+        if (!confirmed) return;
+
+        try {
+            setDeletingId(file.id);
+            setError("");
+
+            const response = await apiFetch(
+                `${DELETE_URL}/${encodeURIComponent(file.id)}`,
+                {
+                    method: "DELETE",
+                    headers: { Accept: "application/json" }
+                }
+            );
+
+            const result = await response.json();
+
+            if (!response.ok || result.code !== 1) {
+                throw new Error(
+                    result.message || `Delete failed. HTTP ${response.status}`
+                );
+            }
+
+            setFiles(previousFiles =>
+                previousFiles.filter(item => item.id !== file.id)
+            );
+
+            setUploadMessage(`${file.name} deleted successfully.`);
+            setUploadError("");
+
+        } catch (err) {
+            console.error("Delete Drive file error:", err);
+            setError(err.message || "Unable to delete file.");
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
+    // ==========================================
+    // 10. UI
     // ==========================================
 
     return (
@@ -961,13 +1067,37 @@ export default function GoogleDrive() {
                                                 </div>
 
                                                 <button
-                                                    className="drive-more"
+                                                    type="button"
+                                                    className="drive-more drive-download-btn"
                                                     onClick={e => {
                                                         e.stopPropagation();
+                                                        handleDownload(file);
                                                     }}
-                                                    title="More options"
+                                                    disabled={isFolder(file) || downloadingId === file.id}
+                                                    title={isFolder(file) ? "Folders cannot be downloaded" : "Download file"}
                                                 >
-                                                    <MoreVertical size={18} />
+                                                    {downloadingId === file.id ? (
+                                                        <RefreshCw size={18} className="drive-spinning" />
+                                                    ) : (
+                                                        <Download size={18} />
+                                                    )}
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    className="drive-more drive-delete-btn"
+                                                    onClick={e => {
+                                                        e.stopPropagation();
+                                                        handleDelete(file);
+                                                    }}
+                                                    disabled={deletingId === file.id}
+                                                    title="Delete from Google Drive"
+                                                >
+                                                    {deletingId === file.id ? (
+                                                        <RefreshCw size={18} className="drive-spinning" />
+                                                    ) : (
+                                                        <Trash2 size={18} />
+                                                    )}
                                                 </button>
 
                                             </div>

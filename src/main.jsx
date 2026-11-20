@@ -7,7 +7,7 @@ import GoogleDrive from "./pages/GoogleDrive.jsx";
 import App from "./App.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Users from "./pages/Users.jsx";
-
+import GoogleCalendar from "./pages/GoogleCalendar";
 import "./index.css";
 
 createRoot(document.getElementById("root")).render(
@@ -18,6 +18,10 @@ createRoot(document.getElementById("root")).render(
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/users" element={<Users />} />
                 <Route path="/google-drive" element={<GoogleDrive />} />
+                <Route
+                    path="/google-calendar"
+                    element={<GoogleCalendar />}
+                />
             </Routes>
         </AuthProvider>
     </BrowserRouter>
